@@ -112,10 +112,44 @@ router.get('/search/date/:date', (req, res) => {
 
     db.all(sql, [req.params.date], (err, rows) => {
         if (err) {
-            res.status(400).json({ "error": err.message });
+            res.status(400).json({ 
+                "success": false,
+                "message": err.message 
+            });
             return;
         }
-        res.json(rows);
+        res.json({
+            "success": true,
+            "data": rows
+        });
+    });
+});
+
+// Search sessions by teacher name (relative search)
+router.get('/search/teacher/:name', (req, res) => {
+    const teacherName = `%${req.params.name}%`;
+    const sql = `
+        SELECT s.*, 
+               c.dayOfWeek, c.startTime, c.classType, 
+               t.name as teacherName, t.email as teacherEmail
+        FROM Sessions s 
+        LEFT JOIN YogaClasses c ON s.classId = c.classId
+        LEFT JOIN Teachers t ON s.teacherId = t.teacherId
+        WHERE t.name LIKE ?
+        ORDER BY s.sessionDate, c.startTime`;
+
+    db.all(sql, [teacherName], (err, rows) => {
+        if (err) {
+            res.status(400).json({ 
+                "success": false,
+                "message": err.message 
+            });
+            return;
+        }
+        res.json({
+            "success": true,
+            "data": rows
+        });
     });
 });
 

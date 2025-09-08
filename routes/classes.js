@@ -1,15 +1,34 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../database');
+const { successResponse, errorResponse } = require('../utils/response');
+const { getPaginationParams, getPaginationMetadata } = require('../utils/pagination');
 
-// Get all yoga classes
+// Get all yoga classes with pagination
 router.get('/', (req, res) => {
-    db.all('SELECT * FROM YogaClasses', [], (err, rows) => {
+    const { page, limit, offset } = getPaginationParams(req.query);
+    
+    // Get total count
+    db.get('SELECT COUNT(*) as total FROM YogaClasses', [], (err, countRow) => {
         if (err) {
-            res.status(400).json({ "error": err.message });
+            res.status(400).json(errorResponse(err.message));
             return;
         }
-        res.json(rows);
+
+        // Get paginated data
+        const sql = 'SELECT * FROM YogaClasses LIMIT ? OFFSET ?';
+        db.all(sql, [limit, offset], (err, rows) => {
+            if (err) {
+                res.status(400).json(errorResponse(err.message));
+                return;
+            }
+
+            const metadata = getPaginationMetadata(countRow.total, page, limit);
+            res.json(successResponse({
+                items: rows,
+                pagination: metadata
+            }));
+        });
     });
 });
 

@@ -1,15 +1,57 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../database');
+const { successResponse, errorResponse } = require('../utils/response');
+const { getPaginationParams, getPaginationMetadata } = require('../utils/pagination');
+const { generateWhereClause, generateOrderClause } = require('../utils/queryHelpers');
 
-// Get all teachers
+// Get all teachers with pagination, sorting and filtering
 router.get('/', (req, res) => {
-    db.all('SELECT * FROM Teachers', [], (err, rows) => {
+    const { page, limit, offset } = getPaginationParams(req.query);
+    const { sortBy, sortOrder } = req.query;
+    
+    const allowedFilters = ['name'];
+    const allowedSortFields = ['name', 'email', 'createdAt'];
+    
+    // Generate where clause for name search (using LIKE)
+    let whereClause = '';
+    const params = [];
+    if (req.query.name) {
+        whereClause = 'WHERE name LIKE ?';
+        params.push(`%${req.query.name}%`);
+    }
+
+    const orderClause = generateOrderClause(sortBy, sortOrder, allowedSortFields);
+
+    // Get total count
+    const countSql = `SELECT COUNT(*) as total FROM Teachers ${whereClause}`;
+    
+    db.get(countSql, params, (err, countRow) => {
         if (err) {
-            res.status(400).json({ "error": err.message });
+            res.status(400).json(errorResponse(err.message));
             return;
         }
-        res.json(rows);
+
+        const sql = `
+            SELECT * FROM Teachers 
+            ${whereClause} 
+            ${orderClause} 
+            LIMIT ? OFFSET ?`;
+
+        db.all(sql, [...params, limit, offset], (err, rows) => {
+            if (err) {
+                res.status(400).json(errorResponse(err.message));
+                return;
+            }
+
+            const metadata = getPaginationMetadata(countRow.total, page, limit);
+            res.json(successResponse({
+                items: rows,
+                pagination: metadata,
+                filters: allowedFilters,
+                sortFields: allowedSortFields
+            }));
+        });
     });
 });
 
